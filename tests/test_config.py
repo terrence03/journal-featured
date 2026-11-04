@@ -92,10 +92,16 @@ def test_backups_are_pruned(cfg, tmp_path):
     assert len(list(bak.glob("config-*.yaml"))) == 3
 
 
-def test_validate_raw_accepts_example_config():
+def test_example_config_is_valid_once_filled_in():
     from journal_featured.config import ROOT
-    journals, topics = validate_raw(yaml.safe_load((ROOT / "config.example.yaml").read_text()))
-    assert journals and topics
+    raw = yaml.safe_load((ROOT / "config.example.yaml").read_text())
+    assert raw["journals"] == [] and raw["topics"] == []
+    with pytest.raises(ConfigError, match="journals, topics"):
+        validate_raw(raw)  # fresh copy: tells the user what to fill in
+    raw["journals"] = [{"name": "Energy Policy", "issn": "0301-4215"}]
+    raw["topics"] = [{"name": "T", "description": "d"}]
+    journals, topics = validate_raw(raw)
+    assert len(journals) == len(topics) == 1
 
 
 def test_secrets_override_env_and_roundtrip(tmp_path, monkeypatch):
@@ -114,3 +120,22 @@ def test_secrets_override_env_and_roundtrip(tmp_path, monkeypatch):
     assert os.environ["SMTP_APP_PASSWORD"] == "abcd efgh 'ijkl'"
     with pytest.raises(ValueError):
         save_secrets({"PATH": "/evil"}, path)
+
+
+def test_schedule(tmp_path):
+    from journal_featured.schedule import DEFAULT, schedule
+    p = tmp_path / "c.yaml"
+    p.write_text("journals: []\n")
+    assert schedule(p) == DEFAULT
+    p.write_text('schedule: "30  7 * * 1,4"\n')
+    assert schedule(p) == "30 7 * * 1,4"
+    p.write_text('schedule: "every monday"\n')
+    with pytest.raises(ValueError):
+        schedule(p)
+
+
+def test_validate_raw_rejects_bad_schedule():
+    raw = yaml.safe_load(CONFIG)
+    raw["schedule"] = "0 8 * *"
+    with pytest.raises(ConfigError, match="schedule"):
+        validate_raw(raw)

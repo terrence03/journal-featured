@@ -1,29 +1,21 @@
 import os
 
 import streamlit as st
-from dotenv import dotenv_values
 
 from journal_featured import fetch, mailer
-from journal_featured.config import SECRETS, Smtp, save_secrets
+from journal_featured.config import Smtp, save_secrets
 from journal_featured.web.common import raw_config
 
 st.title("API 與寄信")
-st.caption("儲存在 data/secrets.env（僅擁有者可讀），會覆蓋 .env 的同名設定。"
+st.caption("儲存在 data/secrets.env（僅擁有者可讀），是金鑰與寄信設定唯一的存放處。"
            "排程與手動執行下次啟動即使用新值，不需重啟容器。")
 
 if msg := st.session_state.pop("secrets_saved", None):
     st.success(msg, icon=":material/check_circle:")
 
-stored = dotenv_values(SECRETS) if SECRETS.exists() else {}
-
-
-def source(key: str) -> str:
-    return "網頁設定" if stored.get(key) else ".env"
-
-
 def secret_input(key: str, label: str, help: str | None = None) -> str:
     current = os.environ.get(key, "")
-    placeholder = f"已設定（…{current[-4:]}，來源：{source(key)}）；留空則不變更" if current else "未設定"
+    placeholder = f"已設定（…{current[-4:]}）；留空則不變更" if current else "未設定"
     return st.text_input(label, type="password", placeholder=placeholder, help=help, key=f"in_{key}")
 
 

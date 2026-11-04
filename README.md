@@ -4,16 +4,19 @@
 查詢紀錄存入 SQLite（`data/journal.db`），入選文章以 Email 寄出。
 
 ## 設定
-1. `config.yaml`：先 `cp config.example.yaml config.yaml`（此檔含收件人等個人設定，不進 git；一定要在 `docker compose up` 前建立，否則 Docker 會把它建成資料夾）；期刊（名稱 + ISSN）、議題（名稱 + 一段描述）、門檻、收件人、`db_path`
+1. `config.yaml`：先 `cp config.example.yaml config.yaml`（此檔含收件人等個人設定，不進 git；一定要在 `docker compose up` 前建立，否則 Docker 會把它建成資料夾）；期刊（名稱 + ISSN）、議題（名稱 + 一段描述）、門檻、收件人、排程 `schedule`、`db_path`
    - 查 ISSN：`uv run journal-featured --lookup "期刊名稱"`
-2. API 金鑰與寄信設定：可在啟動後到網頁「API 與寄信」頁填寫（存於 `data/secrets.env`，優先於 `.env`），或事先寫入 `.env`（格式見 `.env.example`，不建立也能啟動）：`OPENALEX_API_KEY`、`ANTHROPIC_API_KEY`（選填，Claude 精選）、`SMTP_*`（Gmail 帳號 + [應用程式密碼](https://myaccount.google.com/apppasswords)）
+2. `data/secrets.env`：API 金鑰與寄信設定，啟動後到網頁「API 與寄信」頁填寫即可（也可手動建立）：`OPENALEX_API_KEY`、`ANTHROPIC_API_KEY`（選填，Claude 精選）、`SMTP_*`（Gmail 帳號 + [應用程式密碼](https://myaccount.google.com/apppasswords)）
+3. `.env`（選填）：只用來覆蓋部署變數 `WEB_BIND`、`TZ`，見 `.env.example`
+
+設定位置只有一條規則：**金鑰在 `data/secrets.env`，其餘都在 `config.yaml`**，兩者都能在網頁上修改。
 
 ## 執行（Docker Compose）
 程式只在容器裡執行，本機不需要 Python 環境。
 
 ```bash
 docker compose build                    # 建置映像檔（內含 CPU 版 torch 與 embedding 模型）
-docker compose up -d                    # 啟動常駐服務，依 CRON_SCHEDULE 排程執行
+docker compose up -d                    # 啟動常駐服務，依 config.yaml 的 schedule 排程執行
 docker compose logs -f                  # 查看 log
 
 # 單次執行（不影響常駐服務）
@@ -25,7 +28,7 @@ docker compose run --rm app journal-featured                       # 立即正�
 
 - `config.yaml` 以唯讀方式掛載，修改後下次執行就生效，不需重建
 - 修改程式碼或 `pyproject.toml` 後需 `docker compose up -d --build`
-- 排程與時區可在 `.env` 覆蓋：`CRON_SCHEDULE="0 8 * * 1"`（預設每週一 08:00）、`TZ=Asia/Taipei`
+- 排程在 `config.yaml` 的 `schedule`（cron 格式，預設 `0 8 * * 1` 每週一 08:00），修改後約 30 秒內自動生效，不需重啟；時區用 `.env` 的 `TZ` 覆蓋（預設 Asia/Taipei）
 - 若 `config.yaml` 換了 `model`，第一次執行時會下載並快取在 `hf-cache` volume；或用 `docker compose build --build-arg MODEL=...` 直接打包進映像檔
 
 ## 網頁介面

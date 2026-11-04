@@ -11,8 +11,8 @@ import yaml
 from dotenv import load_dotenv, set_key
 
 ROOT = Path(__file__).resolve().parents[2]
-# API keys and SMTP settings entered in the web UI; overrides .env so the containers can start
-# without any secrets and be configured afterwards.
+# API keys and SMTP settings, entered in the web UI (or by hand). Kept out of config.yaml so they
+# never land in its backups; .env is only for docker compose variables (WEB_BIND, TZ).
 SECRETS = ROOT / "data" / "secrets.env"
 SECRET_KEYS = ("OPENALEX_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_WORKSPACE_ID",
                "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_APP_PASSWORD")
@@ -69,8 +69,7 @@ class Config:
 
 
 def load_secrets(path: Path | None = None) -> None:
-    """Load .env, then the web UI's secrets file on top of it."""
-    load_dotenv(ROOT / ".env")
+    """Load API keys and SMTP settings from data/secrets.env, the single place they live."""
     path = path or SECRETS
     if path.exists():
         load_dotenv(path, override=True)
@@ -92,7 +91,7 @@ def save_secrets(values: dict[str, str], path: Path | None = None) -> None:
 def _env(*names: str) -> dict[str, str]:
     missing = [n for n in names if not os.environ.get(n)]
     if missing:
-        raise ConfigError(f"缺少：{', '.join(missing)}（請到網頁介面「API 與寄信」填寫，或寫入 .env）")
+        raise ConfigError(f"缺少：{', '.join(missing)}（請到網頁介面「API 與寄信」填寫，存於 data/secrets.env）")
     return {n: os.environ[n] for n in names}
 
 
@@ -153,6 +152,10 @@ def validate_raw(raw: dict, where: str = "config.yaml") -> tuple[list[Journal], 
 
     if "threshold" in raw:
         unit(raw["threshold"], "threshold")
+    if raw.get("schedule") is not None:
+        from .schedule import CRON
+        if not CRON.match(" ".join(str(raw["schedule"]).split())):
+            errors.append("schedule 需為 5 欄 cron 格式，如 \"0 8 * * 1\"")
     positive_int("lookback_days")
     positive_int("max_per_topic")
     for r in raw.get("recipients") or []:

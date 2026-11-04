@@ -19,6 +19,23 @@ raw = raw_config()
 backup_dir = data_dir() / "config-backups"
 
 
+WEEKDAYS = dict(zip("0123456", "日一二三四五六")) | {"7": "日"}
+
+
+def describe_cron(expr: str) -> str:
+    """Plain-language reading of the common forms; falls back to the raw expression."""
+    parts = str(expr).split()
+    if len(parts) != 5 or not (parts[0].isdigit() and parts[1].isdigit()) or parts[2:4] != ["*", "*"]:
+        return expr
+    time = f"{int(parts[1]):02d}:{int(parts[0]):02d}"
+    if parts[4] == "*":
+        return f"每天 {time}"
+    days = parts[4].split(",")
+    if all(d in WEEKDAYS for d in days):
+        return f"每週{'、'.join(WEEKDAYS[d] for d in days)} {time}"
+    return expr
+
+
 def clean_rows(df: pd.DataFrame, cols: list[str], floats=()) -> list[dict]:
     out = []
     for rec in df.to_dict("records"):
@@ -83,6 +100,11 @@ with st.form("config"):
     lookback = c1.number_input("回溯天數", 1, 365, int(raw.get("lookback_days", 14)))
     threshold = c2.number_input("全域門檻", 0.0, 1.0, float(raw.get("threshold", 0.85)), 0.005, format="%.3f")
     max_per_topic = c3.number_input("每個議題信中最多篇數", 1, 100, int(raw.get("max_per_topic", 10)))
+    c1, c2 = st.columns([1, 2])
+    schedule = c1.text_input("排程（cron）", str(raw.get("schedule") or "0 8 * * 1"),
+                             help="分 時 日 月 星期，依容器時區。例：0 8 * * 1 = 每週一 08:00；"
+                                  "30 7 * * 1,4 = 每週一、四 07:30")
+    c2.caption(f"目前：{describe_cron(raw.get('schedule') or '0 8 * * 1')}。儲存後約 30 秒內生效，不需重啟。")
     send_empty = st.checkbox("沒有入選文章時仍寄信", bool(raw.get("send_empty", True)))
     recipients = st.text_area("收件人（一行一個）", "\n".join(raw.get("recipients") or []))
     model = st.text_input("Embedding 模型", raw.get("model", "intfloat/multilingual-e5-base"),
@@ -108,6 +130,7 @@ if submitted:
     new["lookback_days"] = int(lookback)
     new["threshold"] = float(threshold)
     new["max_per_topic"] = int(max_per_topic)
+    new["schedule"] = " ".join(schedule.split())
     new["send_empty"] = send_empty
     new["recipients"] = [r.strip() for r in recipients.splitlines() if r.strip()]
     new["model"] = model.strip()

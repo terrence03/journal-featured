@@ -1,15 +1,13 @@
+# 設定位置：偏好設定在 config.yaml，金鑰與 SMTP 在 data/secrets.env（皆可在網頁上修改）。
+# .env 為選填，只用來覆蓋下方 ${...} 變數：WEB_BIND、TZ。
 services:
   app:
     build: .
     image: journal-featured:latest
     container_name: journal-featured
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false     # 未建立 .env 也能啟動，金鑰可在網頁上填寫
     environment:
-      TZ: ${TZ:-Asia/Taipei}
-      CRON_SCHEDULE: ${CRON_SCHEDULE:-0 8 * * 1}   # 每週一 08:00
+      TZ: ${TZ:-Asia/Taipei}   # 排程時區；排程本身在 config.yaml 的 schedule
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
@@ -22,9 +20,6 @@ services:
     depends_on: [app]
     container_name: journal-featured-web
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: false     # 未建立 .env 也能啟動，金鑰可在網頁上填寫
     environment:
       TZ: ${TZ:-Asia/Taipei}
     command:
