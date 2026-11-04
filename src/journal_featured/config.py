@@ -141,14 +141,14 @@ def validate_raw(raw: dict, where: str = "config.yaml") -> tuple[list[Journal], 
         journals.append(Journal(name=j["name"], issn=j.get("issn")))
     for i, t in enumerate(raw["topics"], 1):
         if not isinstance(t, dict) or not t.get("name") or not t.get("description"):
-            errors.append(f"第 {i} 個議題缺少 name 或 description")
+            errors.append(f"第 {i} 個主題缺少 name 或 description")
             continue
         if t.get("threshold") is not None:
-            unit(t["threshold"], f"議題「{t['name']}」的 threshold")
+            unit(t["threshold"], f"主題「{t['name']}」的 threshold")
         topics.append(Topic(name=t["name"], description=t["description"], threshold=t.get("threshold")))
     names = [t.name for t in topics]
     if dupes := sorted({n for n in names if names.count(n) > 1}):
-        errors.append(f"議題名稱重複：{'、'.join(dupes)}")
+        errors.append(f"主題名稱重複：{'、'.join(dupes)}")
 
     if "threshold" in raw:
         unit(raw["threshold"], "threshold")

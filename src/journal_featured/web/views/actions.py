@@ -5,14 +5,15 @@ import streamlit as st
 from journal_featured.web import jobs
 from journal_featured.web.common import is_running, raw_config
 
-st.title("手動執行")
+st.header("手動執行")
 
 running = is_running()
 raw = raw_config()
 recipients = raw.get("recipients") or []
 curate_on = (raw.get("curate") or {}).get("enabled", True)
+default_days = int(raw.get("lookback_days", 14))
 
-missing = [k for k in ("OPENALEX_API_KEY",) if not os.environ.get(k)]
+missing = not os.environ.get("OPENALEX_API_KEY")
 missing_smtp = [k for k in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_APP_PASSWORD") if not os.environ.get(k)]
 if missing:
     st.warning("尚未設定 OpenAlex API key，請先到「API 與寄信」填寫。", icon=":material/key_off:")
@@ -21,32 +22,56 @@ elif missing_smtp:
 if running:
     st.info("目前有工作執行中（可能是排程或先前從這裡啟動的），結束前無法再啟動。", icon=":material/hourglass_top:")
 
-days = st.number_input("回溯天數（0 = 使用設定值 "
-                       f"{raw.get('lookback_days', 14)} 天）", min_value=0, max_value=365, value=0, step=1)
-days_arg = ["--days", str(days)] if days else []
-confirm = st.checkbox(f"我確定要寄信給 {len(recipients)} 位收件人：{', '.join(recipients) or '（未設定）'}")
 
-ACTIONS = [
-    # key, label, args, sends mail, help
-    ("dry", "試跑（dry-run）", ["--dry-run", *days_arg], False,
-     "只抓取、評分並印出各議題分數排行，不寫資料庫、不寄信。"
-     + ("會呼叫 Claude 精選（約 US$0.1）。" if curate_on else "")),
-    ("noemail", "執行，不寄信", ["--no-email", *days_arg], False, "抓取新文章並寫入資料庫，不寄信、不呼叫 Claude。"),
-    ("run", "正式執行並寄信", days_arg, True, "與每週排程相同：抓取、評分、Claude 精選、寫資料庫、寄信。"),
-    ("curate", "重新精選，不寄信", ["--curate-only", "--no-email"], False,
-     "不重新抓取，對最近一次的入選文章重做 Claude 簡評與精選。"),
-    ("curate_mail", "重新精選並寄信", ["--curate-only"], True, "同上，完成後寄信。"),
-    ("resend", "重寄最近一次", ["--resend"], True, "用資料庫中已存的簡評與精選重寄，不呼叫 Claude。"),
-]
-cols = st.columns(3)
-for i, (key, label, args, mail, help_text) in enumerate(ACTIONS):
-    with cols[i % 3]:
-        disabled = running or bool(missing) or (mail and (not confirm or bool(missing_smtp)))
-        if st.button(label, key=key, help=help_text, disabled=disabled, width="stretch",
-                     type="primary" if mail else "secondary"):
-            st.session_state["log"] = jobs.start(args, key).name
+def launch(args: list[str], key: str) -> None:
+    st.session_state["log"] = jobs.start(args, key).name
+    st.rerun()
+
+
+@st.dialog("確認寄信")
+def confirm(label: str, args: list[str], key: str) -> None:
+    st.write(f"「{label}」會寄信給 {len(recipients)} 位收件人：")
+    st.markdown("\n".join(f"- {r}" for r in recipients))
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        if st.button("取消"):
             st.rerun()
-st.caption("寄信類操作需先勾選確認。排程執行的輸出請用 `docker compose logs app` 查看。")
+        if st.button("確認寄出", type="primary", icon=":material/send:"):
+            launch(args, key)
+
+
+def action(key: str, label: str, args: list[str], mail: bool, *, primary: bool = False, icon=None) -> None:
+    disabled = running or missing or (mail and (bool(missing_smtp) or not recipients))
+    if st.button(label, key=key, disabled=disabled, type="primary" if primary else "secondary", icon=icon):
+        if mail:
+            confirm(label, args, key)
+        else:
+            launch(args, key)
+
+
+with st.container(border=True):
+    days = st.number_input("回溯天數", min_value=1, max_value=365, value=default_days, step=1,
+                           help=f"設定值為 {default_days} 天；只影響這次執行（試跑、正式執行、執行不寄信）", width=220)
+    days_arg = ["--days", str(days)] if days != default_days else []
+    with st.container(horizontal=True):
+        action("run", "正式執行並寄信", days_arg, True, primary=True, icon=":material/send:")
+        action("dry", "試跑（dry-run）", ["--dry-run", *days_arg], False, icon=":material/science:")
+    st.caption("正式執行與每週排程相同：抓取、評分、Claude 精選、寫資料庫、寄信。"
+               "試跑只印出各主題分數排行，不寫資料庫、不寄信"
+               + ("，但會呼叫 Claude 精選（約 US$0.1）。" if curate_on else "。"))
+
+with st.expander("其他操作", icon=":material/more_horiz:"):
+    OTHERS = [
+        ("noemail", "執行，不寄信", ["--no-email", *days_arg], False, "抓取新文章並寫入資料庫，不寄信、不呼叫 Claude。"),
+        ("curate", "重新精選，不寄信", ["--curate-only", "--no-email"], False,
+         "不重新抓取，對最近一次的入選文章重做 Claude 簡評與精選。"),
+        ("curate_mail", "重新精選並寄信", ["--curate-only"], True, "同上，完成後寄信。"),
+        ("resend", "重寄最近一次", ["--resend"], True, "用資料庫中已存的簡評與精選重寄，不呼叫 Claude。"),
+    ]
+    for key, label, args, mail, help_text in OTHERS:
+        c1, c2 = st.columns([1, 3], vertical_alignment="center")
+        with c1:
+            action(key, label, args, mail)
+        c2.caption(help_text)
 
 st.subheader("執行輸出")
 
@@ -55,12 +80,14 @@ st.subheader("執行輸出")
 def show_log():
     logs = jobs.logs()
     if not logs:
-        st.caption("尚無從這裡啟動的執行紀錄。")
+        st.caption("尚無執行紀錄。從這裡或排程啟動的執行，輸出都會列在這裡。")
         return
     names = [p.name for p in logs]
     current = st.session_state.get("log")
-    name = st.selectbox("紀錄", names, index=names.index(current) if current in names else 0)
-    text = (jobs.log_dir() / name).read_text(errors="replace")
+    by_name = {p.name: p for p in logs}
+    name = st.selectbox("紀錄", names, index=names.index(current) if current in names else 0,
+                        format_func=lambda n: jobs.describe(by_name[n]))
+    text = by_name[name].read_text(errors="replace")
     code = jobs.exit_code(text)
     if code is None:
         st.info("執行中…", icon=":material/hourglass_top:")

@@ -10,12 +10,12 @@ from .fetch import Article
 
 log = logging.getLogger(__name__)
 
-SYSTEM = """你是一位能源經濟與能源政策領域的研究助理，替一位關注下列議題的讀者挑選每週必讀論文。
+SYSTEM = """你是一位能源經濟與能源政策領域的研究助理，替一位關注下列主題的讀者挑選每週必讀論文。
 
 讀者的關注重點：
 {interests}
 
-你會收到本週經語意篩選後的候選論文（標題、期刊、摘要、符合的議題）。請完成兩件事：
+你會收到本週經語意篩選後的候選論文（標題、期刊、摘要、符合的主題）。請完成兩件事：
 
 一、notes：為每一篇候選論文各寫一句繁體中文簡評（40 字以內），說明它在研究什麼、
     與讀者哪個關注點相關，讓讀者掃一眼就能決定要不要點開。
@@ -52,7 +52,7 @@ def _format(articles: list[Article]) -> str:
             f"[{i}] DOI: {a.doi}\n"
             f"標題: {a.title}\n"
             f"期刊: {a.journal}（{a.published}）\n"
-            f"符合議題: {'、'.join(a.matches)}\n"
+            f"符合主題: {'、'.join(a.matches)}\n"
             f"摘要: {a.abstract or '（無摘要）'}"
         )
     return "\n\n".join(parts)

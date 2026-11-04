@@ -13,7 +13,7 @@ log = logging.getLogger("journal_featured")
 
 
 def parse_args(argv=None):
-    p = argparse.ArgumentParser(description="期刊選讀：依議題篩選期刊新文章")
+    p = argparse.ArgumentParser(description="期刊選讀：依主題篩選期刊新文章")
     p.add_argument("--dry-run", action="store_true", help="只抓取與評分並印出結果，不寫資料庫、不寄信")
     p.add_argument("--days", type=int, help="回溯天數（覆蓋 config 的 lookback_days）")
     p.add_argument("--no-email", action="store_true", help="寫資料庫但不寄信")
@@ -22,6 +22,8 @@ def parse_args(argv=None):
                    help="不抓取、不呼叫 Claude，用資料庫中最近一次執行的入選文章與已存精選重寄信件")
     p.add_argument("--curate-only", action="store_true",
                    help="不重新抓取與評分，直接對資料庫中最近一次執行的入選文章做 Claude 精選")
+    p.add_argument("--rescore", action="store_true",
+                   help="以目前的主題描述與模型，重新計算資料庫中所有文章的各主題分數（供門檻校準；不改變入選紀錄）")
     return p.parse_args(argv)
 
 
@@ -103,9 +105,20 @@ def run_resend(cfg) -> int:
     return 0
 
 
+def run_rescore(cfg) -> int:
+    store = Store(cfg.db_path)
+    articles = store.all_articles()
+    log.info("重新計算 %d 篇文章、%d 個主題的分數", len(articles), len(cfg.topics))
+    score.score(articles, cfg.topics, cfg.model, cfg.threshold)
+    store.update_scores(articles)
+    store.close()
+    log.info("完成")
+    return 0
+
+
 def run(args) -> int:
     use_db = not args.dry_run
-    send_mail = not (args.dry_run or args.no_email)
+    send_mail = not (args.dry_run or args.no_email or args.rescore)
     cfg = load(need_smtp=send_mail and not args.lookup)
 
     if args.lookup:
@@ -114,6 +127,8 @@ def run(args) -> int:
         return 0
 
     with lock.hold(cfg.db_path.parent / lock.NAME):
+        if args.rescore:
+            return run_rescore(cfg)
         if args.resend:
             return run_resend(cfg)
         if args.curate_only:

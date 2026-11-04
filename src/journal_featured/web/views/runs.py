@@ -3,7 +3,7 @@ import streamlit as st
 
 from journal_featured.web.common import raw_config, store
 
-st.title("執行紀錄")
+st.header("執行紀錄")
 
 with store() as s:
     runs = s.runs()

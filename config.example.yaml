@@ -3,7 +3,7 @@ db_path: data/journal.db   # 查詢紀錄 SQLite 檔（相對於專案根目錄�
 schedule: "0 8 * * 1"      # 排程（cron：分 時 日 月 星期，容器時區）。預設每週一 08:00
 lookback_days: 14          # 每週跑，但回溯 14 天以涵蓋延遲上架的文章
 threshold: 0.85            # 相似度門檻。e5 實測：相關 ~0.88-0.90、不相關 ~0.78-0.81，可用 --dry-run 校準
-max_per_topic: 10          # 每個議題信中最多列幾篇
+max_per_topic: 10          # 每個主題信中最多列幾篇
 send_empty: true           # 沒有入選文章時是否仍寄信
 model: intfloat/multilingual-e5-base
 recipients:
@@ -16,20 +16,20 @@ curate:
   picks: 2
   model: claude-opus-5-5
   effort: medium             # low / medium / high
-  # interests：給 Claude 的關注重點（一行一點，可比議題描述更詳細）；留空則使用議題描述。例：
+  # interests：給 Claude 的關注重點（一行一點，可比主題描述更詳細）；留空則使用主題描述。例：
   # interests: |
   #   - 能源轉型：脫碳路徑、化石能源退場、碳定價與氣候政策工具
   #   - 再生能源：太陽光電、風電的布建、競標與躉購制度、併網
 
-# 期刊：名稱 + ISSN（可在網頁「議題與期刊」頁查詢，或 journal-featured --lookup "期刊名稱"）。至少一個。例：
+# 期刊：名稱 + ISSN（可在網頁「主題與期刊」頁查詢，或 journal-featured --lookup "期刊名稱"）。至少一個。例：
 #   - name: Energy Policy
 #     issn: 0301-4215
 journals: []
 
-# 議題：名稱 + 一段描述（以英文為佳）。至少一個。
+# 主題：名稱 + 一段描述（以英文為佳）。至少一個。
 # 描述宜簡短、聚焦（一句話 + 關鍵詞）；過長會稀釋語意、壓低分數。
 # threshold 選填，覆蓋上方全域門檻；同領域期刊的分數常偏高且接近，建議先跑 --dry-run 看分數分布再設定。
-# 一篇文章超過多個議題的門檻時，會同時列在這些議題下。例：
+# 一篇文章超過多個主題的門檻時，會同時列在這些主題下。例：
 #   - name: 能源轉型
 #     description: "energy transition and decarbonization policy"
 #     threshold: 0.83

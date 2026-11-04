@@ -38,7 +38,7 @@ def render(groups: dict[str, list[Article]], since: str, until: str,
             lines.append(f"  {reason}")
         lines.append("")
     if not groups:
-        lines.append("本期沒有符合議題的新文章。")
+        lines.append("本期沒有符合主題的新文章。")
     for topic, articles in groups.items():
         lines.append(f"## {topic}")
         for a in articles:

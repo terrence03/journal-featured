@@ -11,6 +11,9 @@ from journal_featured.web.common import is_running
 
 st.set_page_config(page_title="期刊選讀", page_icon=":material/menu_book:", layout="wide")
 
+# Streamlit's default top padding pushes content a third of the way down the first screen.
+st.html("<style>[data-testid='stMainBlockContainer']{padding-top:3rem}</style>")
+
 load_secrets()  # pick up keys saved on the「API 與寄信」page
 
 views = Path(__file__).parent / "views"
@@ -23,7 +26,8 @@ page = st.navigation({
     ],
     "操作": [
         st.Page(views / "actions.py", title="手動執行", icon=":material/play_circle:"),
-        st.Page(views / "settings.py", title="議題與期刊", icon=":material/settings:"),
+        st.Page(views / "settings.py", title="主題與期刊", icon=":material/settings:"),
+        st.Page(views / "calibrate.py", title="門檻校準", icon=":material/tune:"),
         secrets_page,
     ],
 })

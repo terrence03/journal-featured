@@ -66,3 +66,13 @@ def test_runs_and_scores_roundtrip(tmp_path):
     every = store.run_articles(run_id, selected_only=False)
     assert {x.doi: x.matches for x in every} == {"10.1/x": ["A"], "10.1/y": []}
     assert {x.doi: x.scores for x in every}["10.1/y"] == {"B": 0.5}  # pre-scores rows fall back to best topic
+
+
+def test_stars(tmp_path):
+    store = Store(tmp_path / "j.db")
+    assert store.starred() == set()
+    store.set_star("10.1/x", True)
+    store.set_star("10.1/x", True)  # idempotent
+    store.set_star("10.1/y", True)
+    store.set_star("10.1/y", False)
+    assert store.starred() == {"10.1/x"}

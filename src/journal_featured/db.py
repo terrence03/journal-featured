@@ -37,6 +37,10 @@ CREATE TABLE IF NOT EXISTS articles (
     run_id     INTEGER REFERENCES runs(id)
 );
 CREATE INDEX IF NOT EXISTS articles_selected ON articles(selected, first_seen);
+CREATE TABLE IF NOT EXISTS stars (
+    doi        TEXT PRIMARY KEY,  -- articles.doi
+    starred_at TEXT NOT NULL
+);
 """
 
 
@@ -131,6 +135,17 @@ class Store:
             self.conn.executemany("UPDATE articles SET abstract = ? WHERE doi = ?",
                                   [(a.abstract, a.doi) for a in articles if a.abstract])
 
+    def all_articles(self) -> list[Article]:
+        return [_article(row) for row in self.conn.execute(
+            "SELECT doi, journal, title, published, authors, abstract, url, topic, score, selected,"
+            " matches, scores, note FROM articles")]
+
+    def update_scores(self, articles: list[Article]) -> None:
+        """Store recomputed per-topic scores; topic/score/matches/selected keep the values of their run."""
+        with self.conn:
+            self.conn.executemany("UPDATE articles SET scores = ? WHERE doi = ?",
+                                  [(json.dumps(a.scores, ensure_ascii=False), a.doi) for a in articles])
+
     def update_notes(self, articles: list[Article]) -> None:
         with self.conn:
             self.conn.executemany("UPDATE articles SET note = ? WHERE doi = ?",
@@ -142,6 +157,17 @@ class Store:
                 "UPDATE runs SET featured = ? WHERE id = ?",
                 (json.dumps([{"doi": a.doi, "reason": r} for a, r in featured], ensure_ascii=False), run_id),
             )
+
+    def starred(self) -> set[str]:
+        return {row[0] for row in self.conn.execute("SELECT doi FROM stars")}
+
+    def set_star(self, doi: str, on: bool) -> None:
+        with self.conn:
+            if on:
+                self.conn.execute("INSERT OR IGNORE INTO stars (doi, starred_at) VALUES (?, datetime('now'))",
+                                  (doi,))
+            else:
+                self.conn.execute("DELETE FROM stars WHERE doi = ?", (doi,))
 
     def close(self) -> None:
         self.conn.close()

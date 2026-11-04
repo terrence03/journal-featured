@@ -30,6 +30,7 @@ services:
       - --server.port=8501
       - --server.headless=true
       - --browser.gatherUsageStats=false
+      - --client.toolbarMode=minimal        # 隱藏開發用的 Deploy 按鈕
       - --browser.serverAddress=localhost   # log 只印 localhost 網址，不印連不到的容器／公網 IP
     ports:
       - "${WEB_BIND:-127.0.0.1}:8501:8501"    # 預設只允許本機連線

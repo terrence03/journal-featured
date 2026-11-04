@@ -1,10 +1,10 @@
 # journal-featured 期刊選讀
 
-每週從指定期刊抓新文章（OpenAlex），以 embedding 語意相似度比對感興趣議題，
+每週從指定期刊抓新文章（OpenAlex），以 embedding 語意相似度比對感興趣主題，
 查詢紀錄存入 SQLite（`data/journal.db`），入選文章以 Email 寄出。
 
 ## 設定
-1. `config.yaml`：先 `cp config.example.yaml config.yaml`（此檔含收件人等個人設定，不進 git；一定要在 `docker compose up` 前建立，否則 Docker 會把它建成資料夾）；期刊（名稱 + ISSN）、議題（名稱 + 一段描述）、門檻、收件人、排程 `schedule`、`db_path`
+1. `config.yaml`：先 `cp config.example.yaml config.yaml`（此檔含收件人等個人設定，不進 git；一定要在 `docker compose up` 前建立，否則 Docker 會把它建成資料夾）；期刊（名稱 + ISSN）、主題（名稱 + 一段描述）、門檻、收件人、排程 `schedule`、`db_path`
    - 查 ISSN：`uv run journal-featured --lookup "期刊名稱"`
 2. `data/secrets.env`：API 金鑰與寄信設定，啟動後到網頁「API 與寄信」頁填寫即可（也可手動建立）：`OPENALEX_API_KEY`、`ANTHROPIC_API_KEY`（選填，Claude 精選）、`SMTP_*`（Gmail 帳號 + [應用程式密碼](https://myaccount.google.com/apppasswords)）
 3. `.env`（選填）：只用來覆蓋部署變數 `WEB_BIND`、`TZ`，見 `.env.example`
@@ -34,13 +34,14 @@ docker compose run --rm app journal-featured                       # 立即正�
 ## 網頁介面
 `docker compose up -d` 會同時啟動 `web` 服務，開啟 http://127.0.0.1:8501 ：
 
-- **本週選讀**：各期 Claude 精選與依議題分組的入選文章，含簡評、摘要與信件預覽
-- **文章庫**：所有看過的文章，依關鍵字、期刊、議題、日期、分數篩選，匯出 CSV / BibTeX
+- **本週選讀**：各期 Claude 精選與依主題分組的入選文章，含簡評、摘要、信件預覽與下次排程時間；☆ 可加入收藏
+- **文章庫**：所有看過的文章，依關鍵字、範圍（入選／收藏／全部）、期刊、主題、日期、分數篩選，匯出 CSV / BibTeX
 - **執行紀錄**：每次執行的結果與錯誤、各期刊抓取數；連續抓到 0 篇的期刊會標警告
-- **手動執行**：dry-run、執行不寄信、正式執行、重新精選、重寄（寄信類需勾選確認），輸出存於 `data/logs/`
+- **手動執行**：正式執行、試跑，及執行不寄信、重新精選、重寄（寄信前會跳出確認）；排程與手動執行的輸出都存於 `data/logs/` 並可在此頁查看
+- **主題與期刊**：分頁編輯主題、期刊、排程與收件人、Claude 精選、進階（embedding 模型、還原備份），各分頁分別儲存；
+  寫回 `config.yaml` 時保留註解，舊版備份到 `data/config-backups/`；查詢 ISSN 後可直接加入期刊
+- **門檻校準**：各主題的分數分布直方圖、收藏文章位置、門檻附近的文章；試調門檻可即時看入選數變化，確認後一鍵套用
 - **API 與寄信**：填寫 OpenAlex、Anthropic 金鑰與 SMTP，可測試連線、寄測試信
-- **議題與期刊**：編輯議題、期刊、門檻、收件人、Claude 精選；寫回 `config.yaml` 時保留註解，
-  舊版備份到 `data/config-backups/` 並可在頁面上還原；另可查詢期刊 ISSN
 
 說明：
 - `web` 與 `app` 共用同一映像檔；`app` 只負責排程，`config.yaml` 仍唯讀掛載，只有 `web` 能寫
@@ -60,11 +61,15 @@ docker compose run --rm app journal-featured                       # 立即正�
 - `--curate-only`：對資料庫中最近一次執行的入選文章重新精選（不重新抓取）
 - `--resend`：用資料庫中已存的簡評與精選重寄信件，不呼叫 Claude
 
+`--rescore`：以目前的主題描述與模型重新計算資料庫中所有文章的各主題分數（門檻校準頁用），不改變各期的入選紀錄；
+網頁「門檻校準」頁也有按鈕可執行。
+
 ## 查詢紀錄（SQLite）
 資料庫在 `data/journal.db`（掛載到容器的 `/app/data`）。
 
 - `runs`：每次執行的時間、回溯區間、各期刊抓取數、新文章數、入選數、寄送狀態、錯誤、Claude 精選
-- `articles`：所有看過的文章（DOI 為主鍵，用來去重），含議題、分數（`scores` 為各議題分數）、是否入選
+- `articles`：所有看過的文章（DOI 為主鍵，用來去重），含主題、分數（`scores` 為各主題分數）、是否入選
+- `stars`：網頁上收藏的文章（DOI、收藏時間）
 
 ```bash
 sqlite3 data/journal.db "SELECT run_at, new_count, selected, mail_status FROM runs ORDER BY id DESC LIMIT 5"
