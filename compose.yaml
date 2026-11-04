@@ -1,0 +1,47 @@
+services:
+  app:
+    build: .
+    image: journal-featured:latest
+    container_name: journal-featured
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false     # 未建立 .env 也能啟動，金鑰可在網頁上填寫
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+      CRON_SCHEDULE: ${CRON_SCHEDULE:-0 8 * * 1}   # 每週一 08:00
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      - hf-cache:/cache/huggingface
+
+  # 網頁介面：與 app 共用映像檔，可直接觸發執行；config.yaml 可寫以便在網頁上修改設定。
+  web:
+    image: journal-featured:latest
+    pull_policy: never          # 映像檔由 app 建置，不從 registry 拉
+    depends_on: [app]
+    container_name: journal-featured-web
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false     # 未建立 .env 也能啟動，金鑰可在網頁上填寫
+    environment:
+      TZ: ${TZ:-Asia/Taipei}
+    command:
+      - streamlit
+      - run
+      - src/journal_featured/web/app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+      - --server.headless=true
+      - --browser.gatherUsageStats=false
+      - --browser.serverAddress=localhost   # log 只印 localhost 網址，不印連不到的容器／公網 IP
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:8501:8501"    # 預設只允許本機連線
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./data:/app/data
+      - hf-cache:/cache/huggingface
+
+volumes:
+  hf-cache:

@@ -1,0 +1,74 @@
+# journal-featured 期刊選讀
+
+每週從指定期刊抓新文章（OpenAlex），以 embedding 語意相似度比對感興趣議題，
+查詢紀錄存入 SQLite（`data/journal.db`），入選文章以 Email 寄出。
+
+## 設定
+1. `config.yaml`：先 `cp config.example.yaml config.yaml`（此檔含收件人等個人設定，不進 git；一定要在 `docker compose up` 前建立，否則 Docker 會把它建成資料夾）；期刊（名稱 + ISSN）、議題（名稱 + 一段描述）、門檻、收件人、`db_path`
+   - 查 ISSN：`uv run journal-featured --lookup "期刊名稱"`
+2. API 金鑰與寄信設定：可在啟動後到網頁「API 與寄信」頁填寫（存於 `data/secrets.env`，優先於 `.env`），或事先寫入 `.env`（格式見 `.env.example`，不建立也能啟動）：`OPENALEX_API_KEY`、`ANTHROPIC_API_KEY`（選填，Claude 精選）、`SMTP_*`（Gmail 帳號 + [應用程式密碼](https://myaccount.google.com/apppasswords)）
+
+## 執行（Docker Compose）
+程式只在容器裡執行，本機不需要 Python 環境。
+
+```bash
+docker compose build                    # 建置映像檔（內含 CPU 版 torch 與 embedding 模型）
+docker compose up -d                    # 啟動常駐服務，依 CRON_SCHEDULE 排程執行
+docker compose logs -f                  # 查看 log
+
+# 單次執行（不影響常駐服務）
+docker compose run --rm app journal-featured --lookup "期刊名稱"
+docker compose run --rm app journal-featured --dry-run --days 30   # 只抓取評分並印出，用來校準門檻
+docker compose run --rm app journal-featured --no-email            # 寫資料庫不寄信
+docker compose run --rm app journal-featured                       # 立即正式執行一次
+```
+
+- `config.yaml` 以唯讀方式掛載，修改後下次執行就生效，不需重建
+- 修改程式碼或 `pyproject.toml` 後需 `docker compose up -d --build`
+- 排程與時區可在 `.env` 覆蓋：`CRON_SCHEDULE="0 8 * * 1"`（預設每週一 08:00）、`TZ=Asia/Taipei`
+- 若 `config.yaml` 換了 `model`，第一次執行時會下載並快取在 `hf-cache` volume；或用 `docker compose build --build-arg MODEL=...` 直接打包進映像檔
+
+## 網頁介面
+`docker compose up -d` 會同時啟動 `web` 服務，開啟 http://127.0.0.1:8501 ：
+
+- **本週選讀**：各期 Claude 精選與依議題分組的入選文章，含簡評、摘要與信件預覽
+- **文章庫**：所有看過的文章，依關鍵字、期刊、議題、日期、分數篩選，匯出 CSV / BibTeX
+- **執行紀錄**：每次執行的結果與錯誤、各期刊抓取數；連續抓到 0 篇的期刊會標警告
+- **手動執行**：dry-run、執行不寄信、正式執行、重新精選、重寄（寄信類需勾選確認），輸出存於 `data/logs/`
+- **API 與寄信**：填寫 OpenAlex、Anthropic 金鑰與 SMTP，可測試連線、寄測試信
+- **議題與期刊**：編輯議題、期刊、門檻、收件人、Claude 精選；寫回 `config.yaml` 時保留註解，
+  舊版備份到 `data/config-backups/` 並可在頁面上還原；另可查詢期刊 ISSN
+
+說明：
+- `web` 與 `app` 共用同一映像檔；`app` 只負責排程，`config.yaml` 仍唯讀掛載，只有 `web` 能寫
+- 排程與網頁觸發的執行以 `data/run.lock` 互斥，同時只會有一個在跑（另一個會以代碼 3 略過）
+- 預設只綁定本機；要從其他電腦連線可在 `.env` 設 `WEB_BIND=0.0.0.0`（介面沒有登入機制，請只在可信任的網路使用）
+- 直接在主機上編輯 `config.yaml` 時，請用會就地寫入的編輯器；若編輯器以新檔取代原檔，容器內仍會看到舊版，需 `docker compose restart`
+
+## Claude 精選
+由 Claude（預設 Opus 5.5）依 `config.yaml` 的 `curate.interests`，一次呼叫完成：
+- 每篇入選文章一句繁中簡評，顯示在信中標題下方，存入 `articles.note`
+- 挑出 `picks` 篇（預設 2）附 2–3 句推薦理由，放在信件最上方，存入 `runs.featured`
+
+- 未設定 `ANTHROPIC_API_KEY` 時自動略過，其餘流程照常
+- 每次約 9k 輸入 + 3–4k 輸出 tokens，Opus 5.5 約 US$0.1
+- 已啟用 server-side fallback：主模型拒答時，API 會自動改由其他模型處理
+- `--dry-run` 也會呼叫 Claude 並印出精選結果（會計費）；`--no-email` 則不呼叫
+- `--curate-only`：對資料庫中最近一次執行的入選文章重新精選（不重新抓取）
+- `--resend`：用資料庫中已存的簡評與精選重寄信件，不呼叫 Claude
+
+## 查詢紀錄（SQLite）
+資料庫在 `data/journal.db`（掛載到容器的 `/app/data`）。
+
+- `runs`：每次執行的時間、回溯區間、各期刊抓取數、新文章數、入選數、寄送狀態、錯誤、Claude 精選
+- `articles`：所有看過的文章（DOI 為主鍵，用來去重），含議題、分數（`scores` 為各議題分數）、是否入選
+
+```bash
+sqlite3 data/journal.db "SELECT run_at, new_count, selected, mail_status FROM runs ORDER BY id DESC LIMIT 5"
+sqlite3 data/journal.db "SELECT score, topic, title FROM articles WHERE selected ORDER BY first_seen DESC LIMIT 20"
+```
+
+## 開發
+```bash
+uv run pytest
+```

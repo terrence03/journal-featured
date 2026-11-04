@@ -1,0 +1,67 @@
+# 期刊選讀設定範本：複製成 config.yaml 後修改（cp config.example.yaml config.yaml）
+db_path: data/journal.db   # 查詢紀錄 SQLite 檔（相對於專案根目錄）
+lookback_days: 14          # 每週跑，但回溯 14 天以涵蓋延遲上架的文章
+threshold: 0.85            # 相似度門檻。e5 實測：相關 ~0.88-0.90、不相關 ~0.78-0.81，可用 --dry-run 校準
+max_per_topic: 10          # 每個議題信中最多列幾篇
+send_empty: true           # 沒有入選文章時是否仍寄信
+model: intfloat/multilingual-e5-base
+recipients:
+  - you@example.com
+
+# Claude 精選：為每篇入選文章寫一句簡評，並挑出最值得讀的幾篇放在信件最上方。
+# 需在 .env 設定 ANTHROPIC_API_KEY；未設定時自動略過。每次約 US$0.1（Opus 5.5）。
+curate:
+  enabled: true
+  picks: 2
+  model: claude-opus-5-5
+  effort: medium             # low / medium / high
+  interests: |
+    - 能源轉型：脫碳路徑、化石能源退場、碳定價與氣候政策工具、公正轉型
+    - 再生能源：太陽光電、風電（含離岸風電）的布建、競標與躉購制度、併網
+    - 能源補貼：化石燃料補貼改革、再生能源支持機制、能源價格補貼與能源貧窮
+    - 公平競爭：電力與能源市場的自由化、市場力、反壟斷、電網公平接取、新進業者的公平競爭環境
+
+journals:
+  # 能源經濟
+  - name: Energy Economics
+    issn: 0140-9883
+  - name: The Energy Journal
+    issn: 0195-6574
+  - name: Resource and Energy Economics
+    issn: 0928-7655
+  - name: Economics of Energy & Environmental Policy
+    issn: 2160-5882
+  # 能源政策
+  - name: Energy Policy
+    issn: 0301-4215
+  - name: Utilities Policy
+    issn: 0957-1787
+  - name: The Electricity Journal
+    issn: 1040-6190
+  - name: Energy Strategy Reviews
+    issn: 2211-467X
+  - name: Climate Policy
+    issn: 1469-3062
+  # 跨領域
+  - name: Nature Energy
+    issn: 2058-7546
+  - name: Energy Research & Social Science
+    issn: 2214-6296
+
+# 議題描述宜簡短、聚焦（一句話 + 關鍵詞）；過長會稀釋語意、壓低分數。
+# 這批期刊全屬能源領域，分數普遍偏高且接近（中位數 ~0.79），
+# 因此各議題設定自己的 threshold，覆蓋上方全域值。調整前先跑 --dry-run 看分數分布。
+# 一篇文章超過多個議題的門檻時，會同時列在這些議題下。
+topics:
+  - name: 能源轉型
+    description: "energy transition and decarbonization policy"
+    threshold: 0.83
+  - name: 再生能源
+    description: "renewable energy deployment: solar power, wind power, offshore wind, renewable auctions and feed-in tariffs"
+    threshold: 0.80
+  - name: 能源補貼
+    description: "energy subsidies and subsidy reform: fossil fuel subsidies, renewable support schemes, energy price subsidies"
+    threshold: 0.815
+  - name: 公平競爭
+    description: "competition, market power and antitrust in electricity and energy markets"
+    threshold: 0.815

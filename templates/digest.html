@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px;background:#f6f6f4;font-family:-apple-system,'Segoe UI','Noto Sans TC',sans-serif;color:#222;">
+  <div style="max-width:720px;margin:0 auto;background:#fff;border-radius:8px;padding:24px 28px;">
+    <h1 style="font-size:20px;margin:0 0 4px;">期刊選讀</h1>
+    <p style="margin:0 0 20px;color:#777;font-size:13px;">{{ since }} ～ {{ until }}</p>
+
+    {% if featured %}
+    <div style="margin:0 0 24px;padding:16px 18px;background:#f3f7fc;border-left:4px solid #2b6cb0;border-radius:4px;">
+      <div style="font-size:13px;font-weight:600;color:#2b6cb0;margin-bottom:10px;">本週精選</div>
+      {% for a, reason in featured %}
+      <div style="margin:{{ '0' if loop.first else '14px' }} 0 0;">
+        <a href="{{ a.url }}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">{{ a.title }}</a>
+        <div style="font-size:12px;color:#777;margin:3px 0 5px;">{{ a.journal }}｜{{ a.published }}｜{{ a.matches|join("、") }}</div>
+        <div style="font-size:13px;color:#333;line-height:1.6;">{{ reason }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not groups %}
+    <p style="color:#555;">本期沒有符合議題的新文章。</p>
+    {% endif %}
+
+    {% for topic, articles in groups.items() %}
+    <h2 style="font-size:16px;margin:28px 0 8px;padding-bottom:6px;border-bottom:2px solid #2b6cb0;color:#2b6cb0;">
+      {{ topic }} <span style="font-weight:normal;color:#999;font-size:13px;">（{{ articles|length }} 篇）</span>
+    </h2>
+    {% for a in articles %}
+    <div style="margin:14px 0 18px;">
+      <a href="{{ a.url }}" style="font-size:15px;font-weight:600;color:#1a1a1a;text-decoration:none;">{{ a.title }}</a>
+      <div style="font-size:12px;color:#777;margin:4px 0;">
+        {{ a.journal }}｜{{ a.published }}｜相似度 {{ "%.2f"|format(a.scores.get(topic, a.score)) }}
+        {% if a.matches|length > 1 %}｜亦屬：{{ a.matches|reject("equalto", topic)|join("、") }}{% endif %}
+        {% if a.authors %}｜{{ a.authors[:3]|join(", ") }}{% if a.authors|length > 3 %} et al.{% endif %}{% endif %}
+      </div>
+      {% if a.note %}
+      <div style="font-size:13px;color:#1f4e85;line-height:1.55;margin:2px 0 4px;">→ {{ a.note }}</div>
+      {% endif %}
+      {% if a.abstract %}
+      <div style="font-size:12px;color:#666;line-height:1.55;">{{ a.abstract|truncate_words }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% endfor %}
+
+    <p style="margin-top:28px;font-size:11px;color:#aaa;">由 journal-featured 自動產生</p>
+  </div>
+</body>
+</html>
