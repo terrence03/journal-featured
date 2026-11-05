@@ -12,7 +12,7 @@ from dotenv import load_dotenv, set_key
 
 ROOT = Path(__file__).resolve().parents[2]
 # API keys and SMTP settings, entered in the web UI (or by hand). Kept out of config.yaml so they
-# never land in its backups; .env is only for docker compose variables (WEB_BIND, TZ).
+# never land in its backups; .env is only for docker compose variables (JOURNAL_WEB_BIND, TZ).
 SECRETS = ROOT / "data" / "secrets.env"
 SECRET_KEYS = ("OPENALEX_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_WORKSPACE_ID",
                "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_APP_PASSWORD")

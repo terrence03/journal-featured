@@ -7,7 +7,7 @@
 1. `config.yaml`：先 `cp config.example.yaml config.yaml`（此檔含收件人等個人設定，不進 git；一定要在 `docker compose up` 前建立，否則 Docker 會把它建成資料夾）；期刊（名稱 + ISSN）、主題（名稱 + 一段描述）、門檻、收件人、排程 `schedule`、`db_path`
    - 查 ISSN：`uv run journal-featured --lookup "期刊名稱"`
 2. `data/secrets.env`：API 金鑰與寄信設定，啟動後到網頁「API 與寄信」頁填寫即可（也可手動建立）：`OPENALEX_API_KEY`、`ANTHROPIC_API_KEY`（選填，Claude 精選）、`SMTP_*`（Gmail 帳號 + [應用程式密碼](https://myaccount.google.com/apppasswords)）
-3. `.env`（選填）：只用來覆蓋部署變數 `WEB_BIND`、`TZ`，見 `.env.example`
+3. `.env`（選填）：只用來覆蓋部署變數 `JOURNAL_WEB_BIND`、`TZ`，見 `.env.example`
 
 設定位置只有一條規則：**金鑰在 `data/secrets.env`，其餘都在 `config.yaml`**，兩者都能在網頁上修改。
 
@@ -46,7 +46,7 @@ docker compose run --rm app journal-featured                       # 立即正�
 說明：
 - `web` 與 `app` 共用同一映像檔；`app` 只負責排程，`config.yaml` 仍唯讀掛載，只有 `web` 能寫
 - 排程與網頁觸發的執行以 `data/run.lock` 互斥，同時只會有一個在跑（另一個會以代碼 3 略過）
-- 預設只綁定本機；要從其他電腦連線可在 `.env` 設 `WEB_BIND=0.0.0.0`（介面沒有登入機制，請只在可信任的網路使用）
+- 預設只綁定本機；要從其他電腦連線可在 `.env` 設 `JOURNAL_WEB_BIND=0.0.0.0`（介面沒有登入機制，請只在可信任的網路使用）
 - 直接在主機上編輯 `config.yaml` 時，請用會就地寫入的編輯器；若編輯器以新檔取代原檔，容器內仍會看到舊版，需 `docker compose restart`
 
 ## Claude 精選

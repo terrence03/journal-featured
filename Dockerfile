@@ -1,6 +1,9 @@
-FROM python:3.14-slim-trixie
+ARG PYTHON_IMAGE=python:3.14-slim-trixie
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.5
+FROM ${UV_IMAGE} AS uv
+FROM ${PYTHON_IMAGE}
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 
 ARG SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-amd64
 ARG SUPERCRONIC_SHA1SUM=71b0d58cc53f6bd72cf2f293e09e294b79c666d8
