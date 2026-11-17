@@ -38,3 +38,10 @@ def test_render_note():
                 scores={"A": 0.9}, matches=["A"], topic="A", score=0.9, note="一句簡評")
     html, text = render({"A": [a]}, "s", "u")
     assert "→ 一句簡評" in html and "→ 一句簡評" in text
+
+
+def test_render_errors():
+    html, text = render({}, "s", "u", errors=["Energy Policy: <403> Forbidden"])
+    assert "本次執行有問題" in html and "&lt;403&gt;" in html
+    assert "- Energy Policy: <403> Forbidden" in text
+    assert "本次執行有問題" not in render({}, "s", "u")[0]

@@ -24,12 +24,18 @@ _env.filters["truncate_words"] = _truncate
 
 
 def render(groups: dict[str, list[Article]], since: str, until: str,
-           featured: list[tuple[Article, str]] | None = None) -> tuple[str, str]:
-    """Return (html, plain_text)."""
+           featured: list[tuple[Article, str]] | None = None,
+           errors: list[str] | None = None) -> tuple[str, str]:
+    """Return (html, plain_text). `errors` are problems from this run, shown above the articles."""
     featured = featured or []
+    errors = errors or []
     html = _env.get_template("digest.html").render(
-        groups=groups, since=since, until=until, featured=featured)
+        groups=groups, since=since, until=until, featured=featured, errors=errors)
     lines = [f"期刊選讀 {since} ~ {until}", ""]
+    if errors:
+        lines.append("## 本次執行有問題，結果可能不完整")
+        lines.extend(f"- {e}" for e in errors)
+        lines.append("")
     if featured:
         lines.append("## 本週精選")
         for a, reason in featured:

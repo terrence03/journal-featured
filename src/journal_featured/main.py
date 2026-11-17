@@ -1,6 +1,7 @@
 """Weekly run: fetch → dedupe → score → log to SQLite → email digest."""
 
 import argparse
+import html
 import logging
 import sys
 from datetime import date, datetime, timedelta
@@ -24,6 +25,8 @@ def parse_args(argv=None):
                    help="不重新抓取與評分，直接對資料庫中最近一次執行的入選文章做 Claude 精選")
     p.add_argument("--rescore", action="store_true",
                    help="以目前的主題描述與模型，重新計算資料庫中所有文章的各主題分數（供門檻校準；不改變入選紀錄）")
+    p.add_argument("--fill-abstracts", action="store_true",
+                   help="為資料庫中缺摘要的文章重新補抓摘要（補完後可再執行 --rescore 更新分數）")
     return p.parse_args(argv)
 
 
@@ -44,7 +47,7 @@ def resolve_issns(cfg) -> list[str]:
 def fill_abstracts(articles: list[fetch.Article]) -> None:
     for a in articles:
         if not a.abstract:
-            fetch.fill_abstract_from_crossref(a)
+            fetch.fill_abstract(a)
     log.info("摘要缺漏：%d / %d 篇", sum(not a.abstract for a in articles), len(articles))
 
 
@@ -116,9 +119,32 @@ def run_rescore(cfg) -> int:
     return 0
 
 
+def run_fill_abstracts(cfg) -> int:
+    store = Store(cfg.db_path)
+    missing = [a for a in store.all_articles() if not a.abstract]
+    log.info("補抓 %d 篇缺摘要的文章", len(missing))
+    fill_abstracts(missing)
+    store.update_abstracts(missing)
+    store.close()
+    log.info("完成：補到 %d 篇", sum(bool(a.abstract) for a in missing))
+    return 0
+
+
+def notify_failure(cfg, error: Exception) -> None:
+    """Tell the recipients a run crashed; without this a broken schedule just goes quiet."""
+    reason = fetch.redact(f"{type(error).__name__}: {error}")
+    text = f"期刊選讀本次執行失敗，沒有產生選讀結果。\n\n{reason}\n\n完整紀錄請看網頁介面「手動執行」頁的執行記錄檔。"
+    body = "".join(f"<p>{html.escape(p)}</p>" for p in text.split("\n\n"))
+    try:
+        mailer.send(cfg.smtp, cfg.recipients, f"期刊選讀 {datetime.now():%Y-%m-%d}：執行失敗", body, text)
+        log.info("已寄出失敗通知")
+    except Exception:
+        log.exception("失敗通知也寄不出去")
+
+
 def run(args) -> int:
     use_db = not args.dry_run
-    send_mail = not (args.dry_run or args.no_email or args.rescore)
+    send_mail = not (args.dry_run or args.no_email or args.rescore or args.fill_abstracts)
     cfg = load(need_smtp=send_mail and not args.lookup)
 
     if args.lookup:
@@ -131,9 +157,17 @@ def run(args) -> int:
             return run_rescore(cfg)
         if args.resend:
             return run_resend(cfg)
+        if args.fill_abstracts:
+            return run_fill_abstracts(cfg)
         if args.curate_only:
             return run_curate_only(args, cfg)
-        return run_pipeline(args, cfg, use_db, send_mail)
+        try:
+            return run_pipeline(args, cfg, use_db, send_mail)
+        except Exception as e:
+            log.exception("執行失敗")
+            if send_mail:
+                notify_failure(cfg, e)
+            return 1
 
 
 def run_pipeline(args, cfg, use_db: bool, send_mail: bool) -> int:
@@ -205,11 +239,12 @@ def run_pipeline(args, cfg, use_db: bool, send_mail: bool) -> int:
         return 0
 
     mail_status = "未寄送"
-    if send_mail and (groups or cfg.send_empty):
-        html, text = mailer.render(groups, since.isoformat(), until.isoformat(), featured)
-        subject = f"期刊選讀 {until.isoformat()}：{n_selected} 篇"
+    # Errors alone are worth a mail: otherwise a week where every journal failed looks like a quiet week.
+    if send_mail and (groups or cfg.send_empty or errors):
+        body, text = mailer.render(groups, since.isoformat(), until.isoformat(), featured, errors)
+        subject = f"期刊選讀 {until.isoformat()}：{n_selected} 篇" + ("（執行有問題）" if errors else "")
         try:
-            mailer.send(cfg.smtp, cfg.recipients, subject, html, text)
+            mailer.send(cfg.smtp, cfg.recipients, subject, body, text)
             mail_status = f"已寄送 {len(cfg.recipients)} 人"
         except Exception as e:
             log.exception("寄信失敗")

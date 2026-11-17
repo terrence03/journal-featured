@@ -1,4 +1,4 @@
-"""Fetch recent articles from OpenAlex, filling missing abstracts from Crossref."""
+"""Fetch recent articles from OpenAlex, filling missing abstracts from Crossref and publishers."""
 
 import html
 import logging
@@ -49,14 +49,23 @@ class Article:
         return f"{self.title}. {self.abstract}".strip()
 
 
-def _get(url: str, params: dict, retries: int = 4) -> dict:
+class FetchError(requests.RequestException):
+    """A failed request whose message is safe to log, store and show (API keys removed)."""
+
+
+def redact(text: str) -> str:
+    """Hide API keys that `requests` puts in its error messages as part of the URL."""
+    return re.sub(r"(api_?key=)[^&\s'\")]+", r"\1***", text, flags=re.I)
+
+
+def _request(url: str, params: dict, retries: int = 4) -> requests.Response:
     for attempt in range(retries):
         try:
             r = _session.get(url, params=params, timeout=30)
             if r.status_code == 429 or r.status_code >= 500:
                 raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
             r.raise_for_status()
-            return r.json()
+            return r
         except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
             if attempt == retries - 1 or (
                 isinstance(e, requests.HTTPError)
@@ -64,11 +73,17 @@ def _get(url: str, params: dict, retries: int = 4) -> dict:
                 and e.response.status_code < 500
                 and e.response.status_code != 429
             ):
-                raise
+                # `from None`: the original exception carries the full URL, key included,
+                # and would otherwise be printed with the traceback.
+                raise FetchError(redact(str(e)), response=e.response) from None
             wait = 2**attempt
-            log.warning("%s 失敗（%s），%ds 後重試", url, e, wait)
+            log.warning("%s 失敗（%s），%ds 後重試", url, redact(str(e)), wait)
             time.sleep(wait)
     raise RuntimeError("unreachable")
+
+
+def _get(url: str, params: dict, retries: int = 4) -> dict:
+    return _request(url, params, retries).json()
 
 
 def rebuild_abstract(inverted: dict[str, list[int]] | None) -> str:
@@ -138,13 +153,45 @@ def fetch_journal(issn: str, journal_name: str, since: date, api_key: str) -> li
     return articles
 
 
-def fill_abstract_from_crossref(article: Article) -> None:
-    try:
-        data = _get(f"{CROSSREF}/works/{article.doi}", {}, retries=2)
-    except requests.RequestException as e:
-        log.debug("Crossref %s 失敗：%s", article.doi, e)
-        return
-    if abstract := data.get("message", {}).get("abstract"):
-        article.abstract = strip_jats(abstract)
-        article.abstract = re.sub(r"^Abstract\s+", "", article.abstract)
+def _clean_abstract(text: str) -> str:
+    return re.sub(r"^Abstract\s+", "", strip_jats(text))
 
+
+def _crossref_abstract(doi: str) -> str:
+    data = _get(f"{CROSSREF}/works/{doi}", {}, retries=2)
+    return data.get("message", {}).get("abstract") or ""
+
+
+META_TAG = re.compile(r"<meta\b[^>]*>", re.I)
+META_ATTR = re.compile(r"""\b(name|content)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
+ABSTRACT_META = ("citation_abstract", "dc.description")
+
+
+def meta_abstract(page: str) -> str:
+    """Pull the abstract out of a publisher landing page's <meta> tags (Nature, Wiley, T&F…)."""
+    found = {}
+    for tag in META_TAG.findall(page):
+        attrs = {k.lower(): a or b for k, a, b in META_ATTR.findall(tag)}
+        if attrs.get("content"):
+            found.setdefault(attrs.get("name", "").lower(), attrs["content"])
+    return next((found[n] for n in ABSTRACT_META if n in found), "")
+
+
+def _landing_abstract(doi: str) -> str:
+    return meta_abstract(_request(f"https://doi.org/{doi}", {}, retries=2).text)
+
+
+def fill_abstract(article: Article) -> None:
+    """Try Crossref, then the publisher's landing page."""
+    sources = [("Crossref", lambda: _crossref_abstract(article.doi))]
+    if not article.doi.startswith("10.1016/"):  # Elsevier: ScienceDirect refuses scripted requests
+        sources.append(("出版社頁面", lambda: _landing_abstract(article.doi)))
+    for name, source in sources:
+        try:
+            abstract = _clean_abstract(source())
+        except (requests.RequestException, ValueError) as e:
+            log.debug("%s %s 失敗：%s", name, article.doi, e)
+            continue
+        if abstract:
+            article.abstract = abstract
+            return
