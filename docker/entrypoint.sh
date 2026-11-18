@@ -11,7 +11,7 @@ CRONTAB=/tmp/crontab
 python -m journal_featured.schedule > "$CRONTAB"
 echo "排程：$(cut -d' ' -f1-5 "$CRONTAB")（TZ=${TZ:-UTC}）"
 
-# Watch config.yaml: when the schedule changes (e.g. edited in the web UI), rewrite the
+# Watch config.yaml: when the schedule changes rewrite the
 # crontab and send SIGUSR2 so supercronic (PID 1 after exec) reloads it. An invalid
 # schedule is reported and the previous one stays in effect.
 (

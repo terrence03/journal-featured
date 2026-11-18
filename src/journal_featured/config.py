@@ -11,7 +11,7 @@ import yaml
 from dotenv import load_dotenv, set_key
 
 ROOT = Path(__file__).resolve().parents[2]
-# API keys and SMTP settings, entered in the web UI (or by hand). Kept out of config.yaml so they
+# API keys and SMTP settings, written by hand. Kept out of config.yaml so they
 # never land in its backups; .env is only for docker compose variables (JOURNAL_WEB_BIND, TZ).
 SECRETS = ROOT / "data" / "secrets.env"
 SECRET_KEYS = ("OPENALEX_API_KEY", "ANTHROPIC_API_KEY", "ANTHROPIC_WORKSPACE_ID",
@@ -91,7 +91,7 @@ def save_secrets(values: dict[str, str], path: Path | None = None) -> None:
 def _env(*names: str) -> dict[str, str]:
     missing = [n for n in names if not os.environ.get(n)]
     if missing:
-        raise ConfigError(f"缺少：{', '.join(missing)}（請到網頁介面「API 與寄信」填寫，存於 data/secrets.env）")
+        raise ConfigError(f"缺少：{', '.join(missing)}（請填在 data/secrets.env）")
     return {n: os.environ[n] for n in names}
 
 

@@ -1,4 +1,4 @@
-"""Cross-process run lock, so the cron job and runs started from the web UI never overlap.
+"""Cross-process run lock, so the cron job and runs started by hand never overlap.
 
 flock works across containers too, as long as they share the same bind-mounted data directory.
 """

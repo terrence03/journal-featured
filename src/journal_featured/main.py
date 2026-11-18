@@ -133,7 +133,7 @@ def run_fill_abstracts(cfg) -> int:
 def notify_failure(cfg, error: Exception) -> None:
     """Tell the recipients a run crashed; without this a broken schedule just goes quiet."""
     reason = fetch.redact(f"{type(error).__name__}: {error}")
-    text = f"期刊選讀本次執行失敗，沒有產生選讀結果。\n\n{reason}\n\n完整紀錄請看網頁介面「手動執行」頁的執行記錄檔。"
+    text = f"期刊選讀本次執行失敗，沒有產生選讀結果。\n\n{reason}\n\n完整紀錄請看 data/logs/ 的執行記錄檔，或 docker compose logs app。"
     body = "".join(f"<p>{html.escape(p)}</p>" for p in text.split("\n\n"))
     try:
         mailer.send(cfg.smtp, cfg.recipients, f"期刊選讀 {datetime.now():%Y-%m-%d}：執行失敗", body, text)

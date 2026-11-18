@@ -10,7 +10,7 @@ recipients:
   - you@example.com
 
 # Claude 精選：為每篇入選文章寫一句簡評，並挑出最值得讀的幾篇放在信件最上方。
-# 需在網頁「API 與寄信」頁設定 Anthropic API key；未設定時自動略過。每次約 US$0.1（Opus 5.5）。
+# 需在 data/secrets.env 設定 ANTHROPIC_API_KEY；未設定時自動略過。每次約 US$0.1（Opus 5.5）。
 curate:
   enabled: true
   picks: 2
@@ -21,7 +21,7 @@ curate:
   #   - 能源轉型：脫碳路徑、化石能源退場、碳定價與氣候政策工具
   #   - 再生能源：太陽光電、風電的布建、競標與躉購制度、併網
 
-# 期刊：名稱 + ISSN（可在網頁「主題與期刊」頁查詢，或 journal-featured --lookup "期刊名稱"）。至少一個。例：
+# 期刊：名稱 + ISSN（查詢：journal-featured --lookup "期刊名稱"）。至少一個。例：
 #   - name: Energy Policy
 #     issn: 0301-4215
 journals: []

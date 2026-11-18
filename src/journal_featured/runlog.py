@@ -1,4 +1,4 @@
-"""Run logs in data/logs/: one file per run, whether started from the web UI or by the schedule.
+"""Run logs in data/logs/: one file per scheduled run.
 
 `python -m journal_featured.runlog schedule [args...]` is what the crontab calls: it runs
 journal-featured, copying the output both to stdout (docker logs) and to a log file.

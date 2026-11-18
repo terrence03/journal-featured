@@ -1,7 +1,7 @@
 """Print the crontab line for supercronic from config.yaml's `schedule`.
 
 docker/entrypoint.sh calls this at start and every 30 s; when the output changes it reloads
-supercronic, so a schedule edited in the web UI takes effect without restarting the container.
+supercronic, so an edited schedule takes effect without restarting the container.
 """
 
 import re
@@ -15,7 +15,7 @@ from .config import ROOT
 
 DEFAULT = "0 8 * * 1"  # Monday 08:00
 CRON = re.compile(r"^[\w*,/-]+( [\w*,/-]+){4}$")
-# runlog tees the output into data/logs/ (shown on the web UI) as well as to docker logs.
+# runlog tees the output into data/logs/ as well as to docker logs.
 COMMAND = "cd /app && python -m journal_featured.runlog schedule"
 WEEKDAYS = "日一二三四五六"
 _NAMES = {**{d: i for i, d in enumerate(("sun", "mon", "tue", "wed", "thu", "fri", "sat"))},

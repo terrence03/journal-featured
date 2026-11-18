@@ -1,5 +1,5 @@
-# 設定位置：偏好設定在 config.yaml，金鑰與 SMTP 在 data/secrets.env（皆可在網頁上修改）。
-# .env 為選填，只用來覆蓋下方 ${...} 變數：JOURNAL_WEB_BIND、JOURNAL_WEB_PORT、JOURNAL_BASE_PATH、TZ 等。
+# 設定位置：偏好設定在 config.yaml，金鑰與 SMTP 在 data/secrets.env。
+# .env 為選填，只用來覆蓋下方 ${...} 變數：JOURNAL_WEB_BIND、JOURNAL_WEB_PORT、TZ 等。
 name: ${JOURNAL_PROJECT_NAME:-journal-featured}
 
 x-build-args: &build-args
@@ -48,35 +48,21 @@ services:
       - *data
       - *hf-cache
 
-  # 網頁介面：與 app 共用映像檔，可直接觸發執行；config.yaml 可寫以便在網頁上修改設定。
+  # 網頁：唯讀瀏覽入選文章，與 app 共用映像檔。連結全為相對路徑，放在反向代理的任何子路徑下都能用。
   web:
     <<: *app
     pull_policy: never          # 映像檔由 app 建置，不從 registry 拉
     depends_on: [app]
     container_name: journal-featured-web
-    environment:
-      <<: *environment
-      JOURNAL_BASE_PATH: ${JOURNAL_BASE_PATH:-}
-    command:
-      - streamlit
-      - run
-      - src/journal_featured/web/app.py
-      - --server.address=0.0.0.0
-      - --server.port=8501
-      - --server.headless=true
-      - --browser.gatherUsageStats=false
-      - --server.baseUrlPath=${JOURNAL_BASE_PATH:-}   # 選填：掛在子路徑下時設定（例如 app）；預設為根路徑
-      - --server.corsAllowedOrigins=${JOURNAL_ALLOWED_ORIGIN:-https://dell.tailfecede.ts.net}   # 經 tailscale serve 反代時，WebSocket 的 Origin 必須在白名單內
-      - --client.toolbarMode=minimal        # 隱藏開發用的 Deploy 按鈕
-      - --browser.serverAddress=localhost   # log 只印 localhost 網址，不印連不到的容器／公網 IP
+    environment: *environment
+    command: [python, -m, journal_featured.web.app, --host=0.0.0.0, --port=8501]
     ports:
       - "${JOURNAL_WEB_BIND:-127.0.0.1}:${JOURNAL_WEB_PORT:-8501}:8501"   # 預設只允許本機連線
     volumes:
-      - *config
-      - *data
-      - *hf-cache
+      - {<<: *config, read_only: true}
+      - *data                   # 只讀取，但 SQLite WAL 模式的讀者也需要寫入 -shm 檔
     healthcheck:
-      test: [CMD, python, -c, "import os, urllib.request; p = os.environ.get('JOURNAL_BASE_PATH', '').strip('/'); urllib.request.urlopen('http://127.0.0.1:8501/' + (p + '/' if p else '') + '_stcore/health', timeout=3)"]
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/healthz', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 10

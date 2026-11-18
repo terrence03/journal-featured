@@ -37,10 +37,6 @@ CREATE TABLE IF NOT EXISTS articles (
     run_id     INTEGER REFERENCES runs(id)
 );
 CREATE INDEX IF NOT EXISTS articles_selected ON articles(selected, first_seen);
-CREATE TABLE IF NOT EXISTS stars (
-    doi        TEXT PRIMARY KEY,  -- articles.doi
-    starred_at TEXT NOT NULL
-);
 """
 
 
@@ -59,7 +55,7 @@ class Store:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(path, timeout=30)
-        # WAL lets the web UI read while a run is writing.
+        # WAL lets the web page read while a run is writing.
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
         # Columns added after the first release.
@@ -157,17 +153,6 @@ class Store:
                 "UPDATE runs SET featured = ? WHERE id = ?",
                 (json.dumps([{"doi": a.doi, "reason": r} for a, r in featured], ensure_ascii=False), run_id),
             )
-
-    def starred(self) -> set[str]:
-        return {row[0] for row in self.conn.execute("SELECT doi FROM stars")}
-
-    def set_star(self, doi: str, on: bool) -> None:
-        with self.conn:
-            if on:
-                self.conn.execute("INSERT OR IGNORE INTO stars (doi, starred_at) VALUES (?, datetime('now'))",
-                                  (doi,))
-            else:
-                self.conn.execute("DELETE FROM stars WHERE doi = ?", (doi,))
 
     def close(self) -> None:
         self.conn.close()
